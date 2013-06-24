@@ -3,8 +3,6 @@
 // @namespace  	tfprofile
 // @version    	1
 // @description Mouse over profile links (steamcommunity/etf2l/wireplay/teamfortress.tv) to get links their profiles on otherwebsites
-// @downloadURL https://userscripts.org/scripts/source/.user.js
-// @updateURL   https://userscripts.org/scripts/source/.meta.js
 // @include     http://*
 // @include     https://*
 // @grant		GM_xmlhttpRequest
@@ -335,7 +333,7 @@ Array.prototype.forEach.call( document.querySelectorAll("a"), function(link)
 	}
 });
 GM_addStyle( 'div.TFProfile { position:absolute !important; z-index:9999999 !important; background-color:#F8F8FF !important; border: solid 1px #C0C0C0 !important; min-width:200px !important; } \
-div.TFProfile p { font: normal normal normal x-small sans-serif !important; letter-spacing:0px !important; color:#213911; padding:0 !important; margin:5px !important; display: block !important; border: none !important; } \
-div.TFProfile p>a { font: normal normal normal x-small sans-serif !important; letter-spacing:0px !important; color:#4169E1; padding:0 !important; margin:0 !important; display: block !important; border: none !important; } \
+div.TFProfile p { font: normal normal normal x-small sans-serif !important; letter-spacing:0px !important; text-align:left !important; color:#213911; padding:0 !important; margin:5px !important; display: block !important; border: none !important; } \
+div.TFProfile p>a { font: normal normal normal x-small sans-serif !important; letter-spacing:0px !important; text-align:left !important; color:#4169E1; padding:0 !important; margin:0 !important; display: block !important; border: none !important; } \
 ' );
 
