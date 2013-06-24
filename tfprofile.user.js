@@ -13,6 +13,8 @@
 // Base conversion of arbitrary precision integers
 // Minified from http://danvk.org/hex2dec.html
 function convertBase(e,t,n){function r(e,t,n){var r=[];var i=Math.max(e.length,t.length);var s=0;var o=0;while(o<i||s){var u=o<e.length?e[o]:0;var a=o<t.length?t[o]:0;var f=s+u+a;r.push(f%n);s=Math.floor(f/n);o++}return r}function i(e,t,n){if(e<0)return null;if(e==0)return[];var i=[];var s=t;while(true){if(e&1){i=r(i,s,n)}e=e>>1;if(e===0)break;s=r(s,s,n)}return i}function s(e,t){var n=e.split("");var r=[];for(var i=n.length-1;i>=0;i--){var s=parseInt(n[i],t);if(isNaN(s))return null;r.push(s)}return r}var o=s(e,t);if(o===null)return null;var u=[];var a=[1];for(var f=0;f<o.length;f++){if(o[f]){u=r(u,i(o[f],a,n),n)}a=i(t,a,n)}var l="";for(var f=u.length-1;f>=0;f--){l+=u[f].toString(n)}return l}
+// Googled this for Chrome compat
+function addStyle(e){var t=document.createElement("style");t.type="text/css";t.appendChild(document.createTextNode(e));document.getElementsByTagName("head")[0].appendChild(t)}
 
 //----------------------------------------------------------------
 // Steam ID container
@@ -333,7 +335,7 @@ Array.prototype.forEach.call( document.querySelectorAll("a"), function(link)
 		}
 	}
 });
-GM_addStyle( 'div.TFProfile { position:absolute !important; z-index:9999999 !important; background-color:#F8F8FF !important; border: solid 1px #C0C0C0 !important; min-width:200px !important; } \
+addStyle( 'div.TFProfile { position:absolute !important; z-index:9999999 !important; background-color:#F8F8FF !important; border: solid 1px #C0C0C0 !important; min-width:200px !important; } \
 div.TFProfile p { font: normal normal normal x-small sans-serif !important; letter-spacing:0px !important; text-align:left !important; color:#213911; padding:0 !important; margin:5px !important; display: block !important; border: none !important; } \
 div.TFProfile p>a { font: normal normal normal x-small sans-serif !important; letter-spacing:0px !important; text-align:left !important; color:#4169E1; padding:0 !important; margin:0 !important; display: block !important; border: none !important; } \
 ' );
