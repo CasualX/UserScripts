@@ -8,6 +8,7 @@
 // @grant		GM_xmlhttpRequest
 // @grant		GM_addStyle;
 // @run-at document-end
+// ==/UserScript==
 
 // Base conversion of arbitrary precision integers
 // Minified from http://danvk.org/hex2dec.html
