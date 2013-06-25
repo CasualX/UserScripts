@@ -341,7 +341,7 @@ var sites = {
 			onload: function( resp )
 			{
 				var dom = new DOMParser();
-				var doc = dom.parseFromString( resp.responseText ).documentElement;
+				var doc = dom.parseFromString( resp.responseText, "text/html" ).documentElement;
 				if ( doc.querySelector("#otherSites") )
 				{
 					var name = doc.querySelector("#player p").textContent;
