@@ -62,7 +62,7 @@ CSteamID.parse = function( str )
 {
 	var re;
 	// SteamID old format, 2nd part is how etf2l formats it.
-	if ( re = /^(?:STEAM_)?0\:(\d)\:(\d+)$/.exec( str ) )
+	if ( re = /^(?:STEAM_)?0\:([01])\:(\d+)$/.exec( str ) )
 	{
 		var sid = new CSteamID();
 		sid.setID( parseInt(re[2])*2 + parseInt(re[1]) );
@@ -82,9 +82,13 @@ CSteamID.parse = function( str )
 //----------------------------------------------------------------
 // Websites supported
 //----------------------------------------------------------------
+// Each website may have one of 3 functions:
+//  match: Given an url return a non false value if you can handle this profile url
+//  source: Source the player's steamid from this profile url, directly called after match with its returned value (eg, regex result). Callback player.initialize with the steamid on success.
+//  query: Find out given the steamid if this player has a profile on this website. Callback player.addProfile with the url and description on success.
 var sites = [
 {// ETF2L Support
-match: function( url ) { return (/^http\:\/\/etf2l.org\/forum\/user\/(\d+)\/?$/).exec(url); },
+match: function( url ) { return /^http\:\/\/etf2l.org\/forum\/user\/(\d+)\/?$/.exec(url); },
 source: function( re, player )
 {
 	GM_xmlhttpRequest( {
@@ -92,9 +96,9 @@ source: function( re, player )
 		url: "http://etf2l.org/feed/player/?id=" + re[1],
 		onload: function( resp )
 		{
-            var parser = new DOMParser();
-            var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
-            var str = doc.querySelector( "player" ).getAttribute("steamid");
+			var parser = new DOMParser();
+			var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
+			var str = doc.querySelector( "player" ).getAttribute("steamid");
 			player.initialize( CSteamID.parse( str ) );
 		},
 		onerror: function( resp )
@@ -120,7 +124,7 @@ query: function( sid, player )
 }
 },
 {// Steam community support
-match: function( url ) { return (/^https?\:\/\/steamcommunity\.com\/(?:profiles|id)\/[^\/]*\/?$/).exec(url); },
+match: function( url ) { return /^https?\:\/\/steamcommunity\.com\/(?:profiles|id)\/[^\/]*\/?$/.exec(url); },
 source: function( re, player )
 {
 	GM_xmlhttpRequest( {
@@ -156,7 +160,7 @@ query: function( sid, player )
 }
 },
 {// TeamFortress.tv profiles
-match: function( url ) { return (/^https?\:\/\/teamfortress\.tv\/profile\/user\/[^\/]*\/?$/).exec(url); },
+match: function( url ) { return /^https?\:\/\/teamfortress\.tv\/profile\/user\/[^\/]*\/?$/.exec(url); },
 source: function( re, player )
 {
 	GM_xmlhttpRequest( {
@@ -165,7 +169,7 @@ source: function( re, player )
 		onload: function( resp )
 		{
 			// RegExp because no API and not easily accessible
-			var r = (/(STEAM_0\:\d\:\d+)/).exec( resp.responseText );
+			var r = /(STEAM_0\:[01]\:\d+)/.exec( resp.responseText );
 			if ( r ) player.initialize( CSteamID.parse( r[1] ) );
 			else player.error( "regex failure" );
 		},
@@ -186,7 +190,7 @@ query: function( sid, player )
 		url: "https://ixquick.com/do/search?q="+query,
 		onload: function( resp )
 		{
-			var r = (/<a href='(http\:\/\/teamfortress.tv\/profile\/user\/([^']*?))' id='title_1'/).exec(resp.responseText);
+			var r = /<a href='(http\:\/\/teamfortress.tv\/profile\/user\/([^']*?))' id='title_1'/.exec(resp.responseText);
 			if ( r ) player.addProfile( r[1], "TeamFortress.tv (" + r[2] + ")" );
 			else
 			{
@@ -195,7 +199,7 @@ query: function( sid, player )
 					url: "https://ixquick.com/do/search?q="+query,
 					onload: function( resp )
 					{
-						var r = (/<a href='(http\:\/\/teamfortress.tv\/profile\/user\/([^']*?))' id='title_1'/).exec(resp.responseText);
+						var r = /<a href='(http\:\/\/teamfortress.tv\/profile\/user\/([^']*?))' id='title_1'/.exec(resp.responseText);
 						if ( r ) player.addProfile( r[1], "TeamFortress.tv (" + r[2] + ")" );
 					}
 				} );
@@ -213,7 +217,7 @@ source: function( re, player )
 		url: re[0],
 		onload: function( resp )
 		{
-			var r = /<td align=left>(STEAM_0:\d:\d+)<\/td>/.exec(resp.responseText);
+			var r = /<td align=left>(STEAM_0\:[01]\:\d+)<\/td>/.exec(resp.responseText);
 			if ( r ) player.initialize( CSteamID.parse( r[1] ) );
 			else player.error( "regex failure" );
 		},
@@ -253,7 +257,7 @@ query: function( sid, player )
 		url: "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(),
 		onload: function( resp )
 		{
-			if ( resp.responseText.match( "<td>" + sid.render().substr(6) + "</td>" ) )
+			if ( resp.responseText.match( "<td>"+sid.render().substr(6)+"</td>" ) )
 				player.addProfile( "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(), "UGC League Profile" );
 		}
 	} );
@@ -287,9 +291,7 @@ function linkPlayer( a )
 	var div = document.createElement('div');
 	this.div = div;
 	div.classList.add( 'TFProfile' );
-	div.innerHTML = '<div class="panel"><p><span class="sid">Pending...</span></p></div>';
-	//if ( a.nextSibling ) a.parentNode.insertBefore( div, a.nextSibling );
-	//else a.parentNode.appendChild( div );
+	div.innerHTML = '<p>Pending...</p>';
 }
 // Initialize from a steamid
 linkPlayer.prototype.initialize = function( sid )
@@ -297,7 +299,7 @@ linkPlayer.prototype.initialize = function( sid )
 	if ( sid )
 	{
 		// Show steam id
-		var span = this.div.querySelector(".sid");
+		var span = this.div.querySelector("p");
 		span.innerHTML = '';
 		span.appendChild( document.createTextNode( sid.render() ) );
 		// Collect information about other websites
@@ -318,7 +320,7 @@ linkPlayer.prototype.addProfile = function( url, desc )
 {
 	var p = document.createElement('p');
 	p.innerHTML = '<a href="' + url + '" target="_blank">' + desc + '</a>';
-	this.div.firstChild.appendChild( p );
+	this.div.appendChild( p );
 }
 // Error happened
 linkPlayer.prototype.error = function( desc )
@@ -367,9 +369,9 @@ linkPlayer.prototype.source = function( a, re, site )
 		clear();
 	}
 	a.addEventListener( 'mouseover', hover, false );
-	a.addEventListener( 'mouseleave', function() { self.timer = window.setTimeout( leave, 500 ); }, false );
+	a.addEventListener( 'mouseout', function() { for(var el=this;el;el=el.parentNode){if(el==a||el==self.div)return;} self.timer = window.setTimeout( leave, 500 ); }, false );
 	this.div.addEventListener( 'mouseover', clear, false );
-	this.div.addEventListener( 'mouseleave', leave, false );
+	this.div.addEventListener( 'mouseout', function() { for(var el=this;el;el=el.parentNode){if(el==a||el==self.div)return;}leave();}, false );
 }
 
 //----------------------------------------------------------------
