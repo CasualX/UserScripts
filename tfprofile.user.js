@@ -77,6 +77,43 @@ CSteamID.parse = function( str )
 }
 //----------------------------------------------------------------
 
+// Find profiles with search engine because they don't have an API...
+function searchEngine( site, title, content, fn )
+{
+	function search( engine )
+	{
+		GM_xmlhttpRequest( {
+			method: "GET",
+			url: engine.qurl + encodeURIComponent( 'site:'+site+' title:"'+title+'" "'+content+'"' ),
+			onload: function( resp ) { match( resp.responseText, engine ); },
+			onerror: function( resp ) { match( "", engine ); }
+		} );
+	}
+	function match( text, engine )
+	{
+		var r;
+		while ( r = engine.regex.exec( text ) )
+		{
+			// Found a valid result
+			if ( r[1].indexOf(site)>=0 )
+				return fn( r );
+		}
+		// Not found, try another search engine
+		if ( engine.next ) search( engine.next );
+		// Tried all engines, nothing found
+		else fn( false );
+	}
+	var engines = {
+		qurl: "https://ixquick.com/do/search?q=",
+		regex: /<a href='([^']*)' id='title_\d'/,
+		next: {
+		qurl: "https://startpage.com/do/search?q=",
+		regex: /<a href='([^']*)' id='title_\d'/,
+	}
+	};
+	search( engines );
+}
+
 //----------------------------------------------------------------
 // Websites supported
 //----------------------------------------------------------------
@@ -153,8 +190,8 @@ var sites = {
 			{
 				var parser = new DOMParser();
 				doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
-				var name = doc.querySelector("steamID").textContent || "missing profile";
-				player.addProfile( "https://steamcommunity.com/profiles/"+commid, "Steam Community ("+name+")" );
+				var name = doc.querySelector("steamID").textContent;
+				player.addProfile( "https://steamcommunity.com/profiles/"+commid, "Steam Community" + (name?(" ("+name+")"):"") );
 			}
 		} );
 	}
@@ -182,30 +219,11 @@ var sites = {
 	},
 	query: function( sid, player )
 	{
-		// Not perfect...
-		//player.addProfile( "https://encrypted.google.com/search?q=site:teamfortress.tv%20intitle%3A%22Profile%22%20" + sid.render(), "TeamFortress.tv search" );
-		// No API?
-		var query = encodeURIComponent( 'site:teamfortress.tv intitle:"Profile" ' + sid.render() );
-		GM_xmlhttpRequest( {
-			method: "GET",
-			url: "https://ixquick.com/do/search?q="+query,
-			onload: function( resp )
-			{
-				var r = /<a href='(http\:\/\/teamfortress.tv\/profile\/user\/([^']*?))' id='title_1'/.exec(resp.responseText);
-				if ( r ) player.addProfile( r[1], "TeamFortress.tv (" + r[2] + ")" );
-				else
-				{
-					GM_xmlhttpRequest( {
-						method: "GET",
-						url: "https://ixquick.com/do/search?q="+query,
-						onload: function( resp )
-						{
-							var r = /<a href='(http\:\/\/teamfortress.tv\/profile\/user\/([^']*?))' id='title_1'/.exec(resp.responseText);
-							if ( r ) player.addProfile( r[1], "TeamFortress.tv (" + r[2] + ")" );
-						}
-					} );
-				}
-			}
+		// Cannot query by steamid...
+		searchEngine( "teamfortress.tv", "Profile", sid.render(), function(r) {
+			var url = r[1];
+			var name = /profile\/user\/(.*?)\/?$/.exec(url)[1];
+			player.addProfile( url, "TeamFortress.tv ("+name+")" );
 		} );
 	}
 },
@@ -247,10 +265,7 @@ var sites = {
 // UGC League
 "ugcleague": {
 	match: function( url ) { return /^https?\:\/\/www.ugcleague.com\/players_page\.cfm\?player_id=(\d+)$/.exec(url); },
-	source: function( re, player )
-	{
-		player.initialize( CSteamID.parse( re[1] ) );
-	},
+	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
 	query: function( sid, player )
 	{
 		// Assumption: Just check if the player's steamid is on the page, that means he's played in a team.
@@ -260,14 +275,16 @@ var sites = {
 			url: "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(),
 			onload: function( resp )
 			{
-				if ( resp.responseText.match( "<td>"+sid.render().substr(6)+"</td>" ) )
+				if ( resp.responseText.indexOf( "<td>"+sid.render().substr(6)+"</td>" )>=0 )
 					player.addProfile( "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(), "UGC League Profile" );
 			}
 		} );
 	}
 },
-// logs.tf query only
+// logs.tf
 "logs.tf": {
+	match: function( url ) { return /^http\:\/\/logs\.tf\/profile\/(\d+)\/?$/.exec(url); },
+	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
 	query: function( sid, player )
 	{
 		GM_xmlhttpRequest( {
@@ -275,13 +292,65 @@ var sites = {
 			url: "http://logs.tf/profile/"+sid.toString(),
 			onload: function( resp )
 			{
-				console.log(resp);
 				if ( !(/<h5>None found\.<\/h5>/.test(resp.responseText)) )
 					player.addProfile( "http://logs.tf/profile/"+sid.toString(), "Logs.tf Profile" );
 			}
 		} );
 	}
-}
+},
+// SizzlingStats.com (FIXME! Figure out their query api)
+"SizzlingStats": {
+	match: function( url ) { return /^http\:\/\/sizzlingstats\.com\/player\/(\d+)\/?$/.exec(url); },
+	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); }
+},
+// TF2Lobby.com
+"tf2lobby": {
+	match: function( url ) { return /^http\:\/\/(?:www.)?tf2lobby\.com\/profile\?(f?id)=(\d+)$/.exec(url); },
+	source: function( re, player )
+	{
+		if ( re[1]=='fid' )
+		{
+			player.initialize( CSteamID.parse( re[2] ) );
+			return;
+		}
+		
+		GM_xmlhttpRequest( {
+			method: "GET",
+			url: "http://www.tf2lobby.com/profile?id="+re[2],
+			onload: function( resp )
+			{
+				var dom = new DOMParser(), doc, el, sid;
+				if ( ( doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement ) &&
+					 ( el = doc.querySelector("#otherSites>ul>li>a") ) )
+				{
+					sid = CSteamID.parse( /\d+/.exec( el.href )[0] );
+				}
+				player.initialize( sid );
+			},
+			onerror: function( resp )
+			{
+				player.error( resp.responseText );
+			}
+		} );
+	},
+	query: function( sid, player )
+	{
+		GM_xmlhttpRequest( {
+			method: "GET",
+			url: "http://www.tf2lobby.com/profile?fid="+sid.toString(),
+			onload: function( resp )
+			{
+				var dom = new DOMParser();
+				var doc = dom.parseFromString( resp.responseText ).documentElement;
+				if ( doc.querySelector("#otherSites") )
+				{
+					var name = doc.querySelector("#player p").textContent;
+					player.addProfile( "http://www.tf2lobby.com/profile?fid="+sid.toString(), "TF2Lobby Profile ("+name+")" );
+				}
+			}
+		} );
+	}
+},
 };
 
 //----------------------------------------------------------------
@@ -402,10 +471,10 @@ Array.prototype.forEach.call( document.querySelectorAll("a"), function(link)
 	}
 } );
 addStyle('\
-div.TFProfile { position:absolute !important; z-index:9999999 !important; background-color:#F8F8FF !important; border: solid 1px #C0C0C0 !important; min-width:200px !important; padding:5px; -webkit-border-radius: 2px; border-radius: 2px; -webkit-box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); } \
-div.TFProfile img { float:right !important;margin:-5px 0px 0px 0px !important;background-color: #cbcbcb;display: block;height: 18px;width: 36px;font-family: Verdana, Arial, Helvetica, sans-serif;font-size: 11px;font-weight: bold;color: #fff;text-decoration: none;text-align:center;cursor: pointer;line-height: 16px;border: none;-webkit-transition: background 200ms ease-in-out;-moz-transition: background 200ms ease-in-out;-ms-transition: background 200ms ease-in-out;-o-transition: background 200ms ease-in-out;transition: background 200ms ease-in-out; } \
+div.TFProfile { position:absolute !important; z-index:9999999 !important; background-color:#F8F8FF !important; border: solid 1px #C0C0C0 !important; min-width:200px !important; padding:5px; -webkit-box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); } \
+div.TFProfile img { float:right !important;margin:-5px 0px 0px 0px !important;background-color: #cbcbcb;display: block;height: 18px;width: 36px;font-family: Verdana, Arial, Helvetica, sans-serif;font-size: 11px;font-weight: bold;color: #fff;text-decoration: none;text-align:center;cursor: pointer;line-height: 16px;border: none;-webkit-transition: background 100ms ease-in-out;-moz-transition: background 100ms ease-in-out;-ms-transition: background 100ms ease-in-out;-o-transition: background 100ms ease-in-out;transition: background 100ms ease-in-out; } \
 div.TFProfile img:hover { background-color: #de5044;} \
 div.TFProfile p { letter-spacing:0px !important; text-align:left !important; color:#555; padding:0 !important; margin:5px !important; display: block !important; border: none !important; font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 10px; font-style: normal; line-height: normal; font-weight: normal; font-variant: normal; color: #4c4c4c; text-decoration: none; } \
-div.TFProfile p>a { font-family:Verdana, Arial, Helvetica, sans-serif; font-size:9px; font-style:normal; line-height:normal; font-weight:700; font-variant:normal; text-decoration:none; letter-spacing:0 !important; text-align:left !important; color:#f8f8f8; border:1px solid #679bf3; background-color:#77a7f9; -webkit-border-radius:2px; border-radius:2px; width:auto; height:auto; display:block!important; margin:8px 0!important; padding:5px!important } \
-div.TFProfile p>a:hover { font-family:Verdana, Arial, Helvetica, sans-serif;font-size:9px;font-style:normal;line-height:normal;font-weight:700;font-variant:normal;color:#fff;text-decoration:none;letter-spacing:0!important;text-align:left!important;border:1px solid #4585f3;-webkit-border-radius:2px;border-radius:2px;width:auto;height:auto;display:block!important;-webkit-box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);background: #77a7f9;background: -moz-linear-gradient(top, #77a7f9 0%, #699cf2 100%);background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#77a7f9), color-stop(100%,#699cf2));background: -webkit-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -o-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -ms-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: linear-gradient(to bottom, #77a7f9 0%,#699cf2 100%);filter: progid:DXImageTransform.Microsoft.gradient( startColorstr="#77a7f9", endColorstr="#699cf2",GradientType=0 );margin:8px 0!important;padding:5px!important} \
+div.TFProfile p>a { font-family:Verdana, Arial, Helvetica, sans-serif; font-size:9px; font-style:normal; line-height:normal; font-weight:700; font-variant:normal; text-decoration:none; letter-spacing:0 !important; text-align:left !important; color:#f8f8f8; border:1px solid #679bf3; background-color:#77a7f9; width:auto; height:auto; display:block!important; margin:8px 0!important; padding:5px!important } \
+div.TFProfile p>a:hover { font-family:Verdana, Arial, Helvetica, sans-serif;font-size:9px;font-style:normal;line-height:normal;font-weight:700;font-variant:normal;color:#fff;text-decoration:none;letter-spacing:0!important;text-align:left!important;border:1px solid #4585f3;width:auto;height:auto;display:block!important;-webkit-box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);background: #77a7f9;background: -moz-linear-gradient(top, #77a7f9 0%, #699cf2 100%);background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#77a7f9), color-stop(100%,#699cf2));background: -webkit-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -o-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -ms-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: linear-gradient(to bottom, #77a7f9 0%,#699cf2 100%);filter: progid:DXImageTransform.Microsoft.gradient( startColorstr="#77a7f9", endColorstr="#699cf2",GradientType=0 );margin:8px 0!important;padding:5px!important} \
 ');
