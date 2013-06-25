@@ -1,19 +1,18 @@
 // ==UserScript==
 // @name       	TF2 Profile Script
 // @namespace  	tfprofile
-// @version    	1
+// @version    	1.0
 // @description Mouse over profile links (steamcommunity/etf2l/wireplay/teamfortress.tv) to get links their profiles on otherwebsites
 // @include     http://*
 // @include     https://*
 // @grant		GM_xmlhttpRequest
-// @grant		GM_addStyle;
 // @run-at document-end
 // ==/UserScript==
 
 // Base conversion of arbitrary precision integers
 // Minified from http://danvk.org/hex2dec.html
 function convertBase(e,t,n){function r(e,t,n){var r=[];var i=Math.max(e.length,t.length);var s=0;var o=0;while(o<i||s){var u=o<e.length?e[o]:0;var a=o<t.length?t[o]:0;var f=s+u+a;r.push(f%n);s=Math.floor(f/n);o++}return r}function i(e,t,n){if(e<0)return null;if(e==0)return[];var i=[];var s=t;while(true){if(e&1){i=r(i,s,n)}e=e>>1;if(e===0)break;s=r(s,s,n)}return i}function s(e,t){var n=e.split("");var r=[];for(var i=n.length-1;i>=0;i--){var s=parseInt(n[i],t);if(isNaN(s))return null;r.push(s)}return r}var o=s(e,t);if(o===null)return null;var u=[];var a=[1];for(var f=0;f<o.length;f++){if(o[f]){u=r(u,i(o[f],a,n),n)}a=i(t,a,n)}var l="";for(var f=u.length-1;f>=0;f--){l+=u[f].toString(n)}return l}
-// Googled this for Chrome compat
+// Googled this for Chrome compat, minified
 function addStyle(e){var t=document.createElement("style");t.type="text/css";t.appendChild(document.createTextNode(e));document.getElementsByTagName("head")[0].appendChild(t)}
 
 //----------------------------------------------------------------
@@ -176,13 +175,26 @@ query: function( sid, player )
 	// Not perfect...
 	//player.addProfile( "https://encrypted.google.com/search?q=site:teamfortress.tv%20intitle%3A%22Profile%22%20" + sid.RenderOld(), "TeamFortress.tv search" );
 	// No API?
+	var query = encodeURIComponent( 'site:teamfortress.tv intitle:"Profile" ' + sid.RenderOld() );
 	GM_xmlhttpRequest( {
 		method: "GET",
-		url: "https://startpage.com/do/search?q=site:teamfortress.tv%20intitle%3A%22Profile%22%20" + sid.RenderOld(),
+		url: "https://ixquick.com/do/search?q="+query,
 		onload: function( resp )
 		{
 			var r = (/<a href='(http\:\/\/teamfortress.tv\/profile\/user\/([^']*?))' id='title_1'/).exec(resp.responseText);
-			player.addProfile( r[1], "TeamFortress.tv (" + r[2] + ")" );
+			if ( r ) player.addProfile( r[1], "TeamFortress.tv (" + r[2] + ")" );
+			else
+			{
+				GM_xmlhttpRequest( {
+					method: "GET",
+					url: "https://ixquick.com/do/search?q="+query,
+					onload: function( resp )
+					{
+						var r = (/<a href='(http\:\/\/teamfortress.tv\/profile\/user\/([^']*?))' id='title_1'/).exec(resp.responseText);
+						if ( r ) player.addProfile( r[1], "TeamFortress.tv (" + r[2] + ")" );
+					}
+				} );
+			}
 		}
 	} );
 }
@@ -215,7 +227,6 @@ query: function( sid, player )
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		onload: function( resp )
 		{
-			// RegExp because no API
 			var r = (/<td><a href="(index.php\?pg=profile\&action=viewprofile\&aid=\d+)">([^<]*)<\/a><\/td>/).exec(resp.responseText);
 			player.addProfile( "http://tf2.wireplay.co.uk/"+r[1], "Wireplay Profile ("+r[2]+")" );
 		}
@@ -282,20 +293,22 @@ linkPlayer.prototype.source = function( a, re, site )
 	var self = this;
 	function hover()
 	{
-		// Delayed lookup
+		// Delayed lookup, pass parameters through
 		if ( !self.sourced )
 		{
 			self.sourced = true;
 			site.source( re, self );
 		}
 		// Show our overlay only
+		Array.prototype.forEach.call( document.querySelectorAll(".TFProfile"), function(div) { div.style.display="none"; } );
 		clear();
+		// Compute position of the tooltip
 		var r = a.getBoundingClientRect();
 		var bottom = r.bottom + ( document.documentElement.scrollTop || document.body.scrollTop );
 		var left = r.left + ( document.documentElement.scrollLeft || document.body.scrollLeft );
 		self.div.style.top = bottom + "px";
 		self.div.style.left = left + "px";
-		
+		// Show it
 		self.div.style.display = "block";
 		document.body.appendChild( self.div );
 	}
