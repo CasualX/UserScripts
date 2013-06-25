@@ -41,7 +41,7 @@ CSteamID.prototype.setID64 = function( id )
 	this.EAccountType = parseInt(hex.substr(-14,1),16);
 	this.EUniverse = parseInt(hex.substr(-16,2),16);
 }
-CSteamID.prototype.RenderOld = function()
+CSteamID.prototype.render = function()
 {
 	// Old style STEAM_0:x:y format
 	return "STEAM_0:" + (this.unAccountID%2) + ":" + (this.unAccountID>>1);
@@ -62,10 +62,17 @@ CSteamID.parse = function( str )
 {
 	var re;
 	// SteamID old format, 2nd part is how etf2l formats it.
-	if ( ( re = /^STEAM_0\:(\d)\:(\d+)$/.exec( str ) ) || ( re = /^0\:(\d)\:(\d+)$/.exec( str ) ) )
+	if ( re = /^(?:STEAM_)?0\:(\d)\:(\d+)$/.exec( str ) )
 	{
 		var sid = new CSteamID();
 		sid.setID( parseInt(re[2])*2 + parseInt(re[1]) );
+		return sid;
+	}
+	// Looks like a standard 64bit steamid
+	else if ( re = /^\d+$/.exec( str ) )
+	{
+		var sid = new CSteamID();
+		sid.setID64( str );
 		return sid;
 	}
 	return null;
@@ -100,7 +107,7 @@ query: function( sid, player )
 {
 	GM_xmlhttpRequest( {
 		method: "GET",
-		url: "http://etf2l.org/feed/player/?steamid=" + sid.RenderOld(),
+		url: "http://etf2l.org/feed/player/?steamid=" + sid.render(),
 		onload: function( resp )
 		{
 			var parser = new DOMParser();
@@ -124,9 +131,7 @@ source: function( re, player )
 			var parser = new DOMParser();
 			var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
 			var str = doc.querySelector( "steamID64" ).textContent;
-			var sid = new CSteamID();
-			sid.setID64( str );
-			player.initialize( sid );
+			player.initialize( CSteamID.parse( str ) );
 		},
 		onerror: function( resp )
 		{
@@ -173,9 +178,9 @@ source: function( re, player )
 query: function( sid, player )
 {
 	// Not perfect...
-	//player.addProfile( "https://encrypted.google.com/search?q=site:teamfortress.tv%20intitle%3A%22Profile%22%20" + sid.RenderOld(), "TeamFortress.tv search" );
+	//player.addProfile( "https://encrypted.google.com/search?q=site:teamfortress.tv%20intitle%3A%22Profile%22%20" + sid.render(), "TeamFortress.tv search" );
 	// No API?
-	var query = encodeURIComponent( 'site:teamfortress.tv intitle:"Profile" ' + sid.RenderOld() );
+	var query = encodeURIComponent( 'site:teamfortress.tv intitle:"Profile" ' + sid.render() );
 	GM_xmlhttpRequest( {
 		method: "GET",
 		url: "https://ixquick.com/do/search?q="+query,
@@ -200,7 +205,7 @@ query: function( sid, player )
 }
 },
 {// Wireplay
-match: function( url ) { return (/^https?\:\/\/tf2\.wireplay\.co\.uk\/.*?index\.php\?pg=profile\&action=viewprofile\&aid=(\d+)/).exec(url); },
+match: function( url ) { return /^https?\:\/\/tf2\.wireplay\.co\.uk\/.*?index\.php\?pg=profile\&action=viewprofile\&aid=(\d+)/.exec(url); },
 source: function( re, player )
 {
 	GM_xmlhttpRequest( {
@@ -208,7 +213,7 @@ source: function( re, player )
 		url: re[0],
 		onload: function( resp )
 		{
-			var r = (/<td align=left>(STEAM_0:\d:\d+)<\/td>/).exec(resp.responseText);
+			var r = /<td align=left>(STEAM_0:\d:\d+)<\/td>/.exec(resp.responseText);
 			if ( r ) player.initialize( CSteamID.parse( r[1] ) );
 			else player.error( "regex failure" );
 		},
@@ -223,12 +228,48 @@ query: function( sid, player )
 	GM_xmlhttpRequest( {
 		method: "POST",
 		url: "http://tf2.wireplay.co.uk/index.php?pg=search",
-		data: "clantag=false&clanname=false&playername=false&steamid=true&searchterm=" + encodeURIComponent(sid.RenderOld()),
+		data: "clantag=false&clanname=false&playername=false&steamid=true&searchterm=" + encodeURIComponent(sid.render()),
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		onload: function( resp )
 		{
-			var r = (/<td><a href="(index.php\?pg=profile\&action=viewprofile\&aid=\d+)">([^<]*)<\/a><\/td>/).exec(resp.responseText);
+			var r = /<td><a href="(index.php\?pg=profile\&action=viewprofile\&aid=\d+)">([^<]*)<\/a><\/td>/.exec(resp.responseText);
 			player.addProfile( "http://tf2.wireplay.co.uk/"+r[1], "Wireplay Profile ("+r[2]+")" );
+		}
+	} );
+}
+},
+{// UGC League
+match: function( url ) { return /^https?\:\/\/www.ugcleague.com\/players_page\.cfm\?player_id=(\d+)$/.exec(url); },
+source: function( re, player )
+{
+	player.initialize( CSteamID.parse( re[1] ) );
+},
+query: function( sid, player )
+{
+	// Assumption: Just check if the player's steamid is on the page, that means he's played in a team.
+	// FIXME! Use their player search page instead? http://www.ugcleague.com/playersearch.cfm
+	GM_xmlhttpRequest( {
+		method: "GET",
+		url: "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(),
+		onload: function( resp )
+		{
+			if ( resp.responseText.match( "<td>" + sid.render().substr(6) + "</td>" ) )
+				player.addProfile( "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(), "UGC League Profile" );
+		}
+	} );
+}
+},
+{// logs.tf query only
+query: function( sid, player )
+{
+	GM_xmlhttpRequest( {
+		method: "GET",
+		url: "http://logs.tf/profile/"+sid.toString(),
+		onload: function( resp )
+		{
+			console.log(resp);
+			if ( !(/<h5>None found\.<\/h5>/.test(resp.responseText)) )
+				player.addProfile( "http://logs.tf/profile/"+sid.toString(), "Logs.tf Profile" );
 		}
 	} );
 }
@@ -258,7 +299,7 @@ linkPlayer.prototype.initialize = function( sid )
 		// Show steam id
 		var span = this.div.querySelector(".sid");
 		span.innerHTML = '';
-		span.appendChild( document.createTextNode( sid.RenderOld() ) );
+		span.appendChild( document.createTextNode( sid.render() ) );
 		// Collect information about other websites
 		for ( var i = 0; i<sites.length; ++i )
 		{
@@ -341,15 +382,16 @@ Array.prototype.forEach.call( document.querySelectorAll("a"), function(link)
 	for ( var it = 0, end = sites.length; it<end; ++it )
 	{
 		var site = sites[it];
-		var re = site.match( url );
+		var re = site.match && site.match( url );
 		if ( re )
 		{
 			(new linkPlayer( link )).source( link, re, site );
 		}
 	}
 });
-addStyle( 'div.TFProfile { position:absolute !important; z-index:9999999 !important; background-color:#F8F8FF !important; border: solid 1px #C0C0C0 !important; min-width:200px !important; } \
-div.TFProfile p { font: normal normal normal x-small sans-serif !important; letter-spacing:0px !important; text-align:left !important; color:#213911; padding:0 !important; margin:5px !important; display: block !important; border: none !important; } \
-div.TFProfile p>a { font: normal normal normal x-small sans-serif !important; letter-spacing:0px !important; text-align:left !important; color:#4169E1; padding:0 !important; margin:0 !important; display: block !important; border: none !important; } \
-' );
+addStyle( 'div.TFProfile { position:absolute !important; z-index:9999999 !important; background-color:#F8F8FF !important; border: solid 1px #C0C0C0 !important; min-width:200px !important; padding:5px; -webkit-border-radius: 2px; border-radius: 2px; -webkit-box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); } \
+div.TFProfile p { letter-spacing:0px !important; text-align:left !important; color:#555; padding:0 !important; margin:5px !important; display: block !important; border: none !important; font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 10px; font-style: normal; line-height: normal; font-weight: normal; font-variant: normal; color: #4c4c4c; text-decoration: none; } \
+div.TFProfile p>a { font-family:Verdana, Arial, Helvetica, sans-serif; font-size:9px; font-style:normal; line-height:normal; font-weight:700; font-variant:normal; text-decoration:none; letter-spacing:0 !important; text-align:left !important; color:#f8f8f8; border:1px solid #679bf3; background-color:#77a7f9; -webkit-border-radius:2px; border-radius:2px; width:auto; height:auto; display:block!important; margin:8px 0!important; padding:5px!important } \
+div.TFProfile p>a:hover { font-family:Verdana, Arial, Helvetica, sans-serif;font-size:9px;font-style:normal;line-height:normal;font-weight:700;font-variant:normal;color:#fff;text-decoration:none;letter-spacing:0!important;text-align:left!important;border:1px solid #4585f3;-webkit-border-radius:2px;border-radius:2px;width:auto;height:auto;display:block!important;-webkit-box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);background: #77a7f9;background: -moz-linear-gradient(top, #77a7f9 0%, #699cf2 100%);background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#77a7f9), color-stop(100%,#699cf2));background: -webkit-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -o-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -ms-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: linear-gradient(to bottom, #77a7f9 0%,#699cf2 100%);filter: progid:DXImageTransform.Microsoft.gradient( startColorstr="#77a7f9", endColorstr="#699cf2",GradientType=0 );margin:8px 0!important;padding:5px!important} \
+' )
 
