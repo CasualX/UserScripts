@@ -144,6 +144,7 @@ function siteSetMissing( p )
 var sites = {
 // Steam community support
 "steamcommunity.com": {
+	group: "steam",
 	match: function( url ) { return /^https?\:\/\/steamcommunity\.com\/(?:profiles|id)\/[^\/]*\/?$/.exec(url); },
 	source: function( re, player )
 	{
@@ -165,6 +166,8 @@ var sites = {
 	},
 	query: function( sid, player, el )
 	{
+		el.textContent = 'steamcommunity.com';
+		
 		var commid = sid.toString();
 		GM_xmlhttpRequest( {
 			method: "GET",
@@ -195,6 +198,7 @@ var sites = {
 },
 // ETF2L Support
 "etf2l.org": {
+	group: "comptf2",
 	match: function( url ) { return /^http\:\/\/etf2l.org\/forum\/user\/(\d+)\/?$/.exec(url); },
 	source: function( re, player )
 	{
@@ -216,6 +220,8 @@ var sites = {
 	},
 	query: function( sid, player, el )
 	{
+		el.textContent = 'etf2l.org';
+		
 		GM_xmlhttpRequest( {
 			method: "GET",
 			url: "http://etf2l.org/feed/player/?steamid=" + sid.render(),
@@ -236,6 +242,7 @@ var sites = {
 },
 // Wireplay TF2 League
 "tf2.wireplay.co.uk": {
+	group: "comptf2",
 	match: function( url ) { return /^https?\:\/\/tf2\.wireplay\.co\.uk\/.*?index\.php\?pg=profile\&action=viewprofile\&aid=(\d+)/.exec(url); },
 	source: function( re, player )
 	{
@@ -255,6 +262,8 @@ var sites = {
 	},
 	query: function( sid, player, el )
 	{
+		el.textContent = 'tf2.wireplay.co.uk';
+		
 		GM_xmlhttpRequest( {
 			method: "POST",
 			url: "http://tf2.wireplay.co.uk/index.php?pg=search",
@@ -274,10 +283,13 @@ var sites = {
 },
 // UGC League
 "ugcleague.com": {
+	group: "comptf2",
 	match: function( url ) { return /^https?\:\/\/www.ugcleague.com\/players_page\.cfm\?player_id=(\d+)$/.exec(url); },
 	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
 	query: function( sid, player, el )
 	{
+		el.textContent = 'ugcleague.com';
+		
 		// Assumption: Just check if the player's steamid is on the page, that means he's played in a team.
 		// FIXME! Use their player search page instead? http://www.ugcleague.com/playersearch.cfm
 		GM_xmlhttpRequest( {
@@ -295,6 +307,7 @@ var sites = {
 },
 // TF2Lobby.com
 "tf2lobby.com": {
+	group: "lobby",
 	match: function( url ) { return /^http\:\/\/(?:www.)?tf2lobby\.com\/profile\?(f?id)=(\d+)$/.exec(url); },
 	source: function( re, player )
 	{
@@ -325,6 +338,8 @@ var sites = {
 	},
 	query: function( sid, player, el )
 	{
+		el.textContent = 'tf2lobby.com';
+		
 		GM_xmlhttpRequest( {
 			method: "GET",
 			url: "http://www.tf2lobby.com/profile?fid="+sid.toString(),
@@ -344,6 +359,7 @@ var sites = {
 },
 // TeamFortress.tv profiles (barely works...)
 "teamfortress.tv": {
+	group: "forum",
 	match: function( url ) { return /^https?\:\/\/teamfortress\.tv\/profile\/user\/[^\/]*\/?$/.exec(url); },
 	source: function( re, player )
 	{
@@ -363,6 +379,8 @@ var sites = {
 	},
 	query: function( sid, player, el )
 	{
+		el.textContent = 'teamfortress.tv';
+		
 		// Cannot query by steamid...
 		searchEngine( "teamfortress.tv", "Profile", sid.render(), function(r) {
 			try {
@@ -377,10 +395,13 @@ var sites = {
 },
 // logs.tf
 "logs.tf": {
+	group: "stats",
 	match: function( url ) { return /^http\:\/\/logs\.tf\/profile\/(\d+)\/?$/.exec(url); },
 	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
 	query: function( sid, player, el )
 	{
+		el.textContent = 'logs.tf';
+		
 		GM_xmlhttpRequest( {
 			method: "GET",
 			url: "http://logs.tf/profile/"+sid.toString(),
@@ -396,6 +417,7 @@ var sites = {
 },
 // SizzlingStats.com (FIXME! Figure out their query api)
 "sizzlingstats.com": {
+	group: "stats",
 	match: function( url ) { return /^http\:\/\/sizzlingstats\.com\/player\/(\d+)\/?$/.exec(url); },
 	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
 	query: function( sid, player ) { return false; }
@@ -429,13 +451,21 @@ linkPlayer.prototype.initialize = function( sid )
 		{
 			var site = sites[it];
 			
+			// Find the group this belongs in
+			var group = this.div.querySelector("article.TFProfile_"+site.group);
+			if ( !group )
+			{
+				group = document.createElement('article');
+				group.className = "TFProfile_"+site.group;
+				this.div.appendChild( group );
+			}
+			
 			var p = document.createElement('p');
 			p.className = 'TFProfile_Pending';
-			p.textContent = it;
 			
 			if ( site.query( sid, this, p )!==false )
 			{
-				this.div.appendChild( p );
+				group.appendChild( p );
 			}
 		}
 	}
@@ -443,14 +473,6 @@ linkPlayer.prototype.initialize = function( sid )
 	{
 		this.error( "Invalid SteamID!" );
 	}
-}
-// Add a profile
-linkPlayer.prototype.addLink = function( url, desc, q )
-{
-	var p = q || document.createElement('p');
-	p.innerHTML = '<a href="' + url + '" target="_blank">' + desc + '</a>';
-	p.className = 'TFProfile_Done';
-	if ( !q ) this.div.appendChild( p );
 }
 // Error happened
 linkPlayer.prototype.error = function( desc )
@@ -462,15 +484,22 @@ linkPlayer.prototype.error = function( desc )
 // Delay the query on mouse over
 linkPlayer.prototype.source = function( a, re, site )
 {
+	this.show( a, function() {
+		if ( !this.sourced )
+		{
+			this.sourced = true;
+			site.source( re, this );
+		}
+	} );
+}
+// Show the UI, delay loading as needed
+linkPlayer.prototype.show = function( a, fn )
+{
 	var self = this;
 	function hover()
 	{
-		// Delayed lookup, pass parameters through
-		if ( !self.sourced )
-		{
-			self.sourced = true;
-			site.source( re, self );
-		}
+		// Begin sourcing
+		fn.call( self );
 		// Show our overlay only
 		Array.prototype.forEach.call( document.querySelectorAll(".TFProfile"), function(div) { div.style.display="none"; } );
 		clear();
@@ -497,10 +526,10 @@ linkPlayer.prototype.source = function( a, re, site )
 		self.div.style.display = "none";
 		clear();
 	}
-	a.addEventListener( 'mouseover', hover, false );
-	a.addEventListener( 'mouseleave', function(e) { self.timer = window.setTimeout( leave, 500 ); }, false );
+	a.addEventListener( 'mouseover', function(e) { clear(); self.timer = window.setTimeout( hover, 500 ); }, false );
+	a.addEventListener( 'mouseleave', function(e) { clear(); self.timer = window.setTimeout( leave, 500 ); }, false );
 	this.div.addEventListener( 'mouseover', clear, false );
-	this.div.addEventListener( 'mouseleave', function(e) { leave(); }, false );
+	this.div.addEventListener( 'mouseleave', function(e) { clear(); self.timer = window.setTimeout( leave, 200 ); }, false );
 
 	// Work around for mouseleave not working for chrome...
 	var img = document.createElement('img');
@@ -527,13 +556,114 @@ Array.prototype.forEach.call( document.querySelectorAll("a"), function(link)
 		}
 	}
 } );
+
+// Make it all look pretty
 addStyle('\
-div.TFProfile { position:absolute !important; z-index:9999999 !important; background-color:#F8F8FF !important; border: solid 1px #C0C0C0 !important; min-width:200px !important; padding:5px; -webkit-box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); } \
-div.TFProfile img { float:right !important;margin:-5px 0px 0px 0px !important;background-color: #cbcbcb;display: block;height: 18px;width: 36px;font-family: Verdana, Arial, Helvetica, sans-serif;font-size: 11px;font-weight: bold;color: #fff;text-decoration: none;text-align:center;cursor: pointer;line-height: 16px;border: none;-webkit-transition: background 100ms ease-in-out;-moz-transition: background 100ms ease-in-out;-ms-transition: background 100ms ease-in-out;-o-transition: background 100ms ease-in-out;transition: background 100ms ease-in-out; } \
-div.TFProfile img:hover { background-color: #de5044;} \
-div.TFProfile p { letter-spacing:0px !important; text-align:left !important; color:#555!important; padding:0!important; margin:5px!important; display: block !important; border: none !important; font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 10px; font-style: normal; line-height: normal; font-weight: normal; font-variant: normal; color: #4c4c4c; text-decoration: none; } \
-div.TFProfile p.TFProfile_Done>a { font-family:Verdana, Arial, Helvetica, sans-serif; font-size:9px; font-style:normal; line-height:normal; font-weight:700; font-variant:normal; text-decoration:none; letter-spacing:0 !important; text-align:left !important; color:#f8f8f8; border:1px solid #679bf3; background-color:#77a7f9; width:auto; height:auto; display:block!important; margin:8px 0!important; padding:5px!important } \
-div.TFProfile p.TFProfile_Done>a:hover { font-family:Verdana, Arial, Helvetica, sans-serif;font-size:9px;font-style:normal;line-height:normal;font-weight:700;font-variant:normal;color:#fff;text-decoration:none;letter-spacing:0!important;text-align:left!important;border:1px solid #4585f3;width:auto;height:auto;display:block!important;-webkit-box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);background: #77a7f9;background: -moz-linear-gradient(top, #77a7f9 0%, #699cf2 100%);background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#77a7f9), color-stop(100%,#699cf2));background: -webkit-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -o-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -ms-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: linear-gradient(to bottom, #77a7f9 0%,#699cf2 100%);filter: progid:DXImageTransform.Microsoft.gradient( startColorstr="#77a7f9", endColorstr="#699cf2",GradientType=0 );margin:8px 0!important;padding:5px!important} \
-div.TFProfile p.TFProfile_Pending { color:#CCC!important; } \
-div.TFProfile p.TFProfile_Missing { display:none!important; } \
+div.TFProfile { \
+position:absolute !important; \
+z-index:9999999 !important; \
+background-color:#F8F8FF !important; \
+border: solid 1px #C0C0C0 !important; \
+min-width:200px !important; \
+padding:5px; \
+-webkit-box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); \
+box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); } \
+\
+div.TFProfile img { \
+float:right !important;\
+margin:-5px 0px 0px 0px !important;\
+background-color: #cbcbcb;\
+display: block;\
+height: 18px;\
+width: 36px;\
+font-family: Verdana, Arial, Helvetica, sans-serif;\
+font-size: 11px;\
+font-weight: bold;color: #fff;\
+text-decoration: none;\
+text-align:center;\
+cursor: pointer;\
+line-height: 16px;\
+border: none;\
+-webkit-transition: background 100ms ease-in-out;\
+-moz-transition: background 100ms ease-in-out;\
+-ms-transition: background 100ms ease-in-out;\
+-o-transition: background 100ms ease-in-out;\
+transition: background 100ms ease-in-out; } \
+\
+div.TFProfile img:hover { \
+background-color: #de5044;\
+} \
+\
+div.TFProfile p { \
+letter-spacing:0px !important; \
+text-align:left !important; \
+color:#555!important; \
+padding:0!important; \
+margin:0px!important; \
+display: block !important; \
+border: none !important; \
+font-family: Verdana, Arial, Helvetica, sans-serif; \
+font-size: 10px; \
+font-style: normal; \
+line-height: normal; \
+font-weight: normal; \
+font-variant: normal; \
+color: #4c4c4c; \
+text-decoration: none; } \
+\
+div.TFProfile p.TFProfile_Done>a { \
+font-family:Verdana, Arial, Helvetica, sans-serif; \
+font-size:9px; \
+font-style:normal; \
+line-height:normal; \
+font-weight:700; \
+font-variant:normal; \
+text-decoration:none; \
+letter-spacing:0 !important; \
+text-align:left !important; \
+color:#f8f8f8; \
+border:1px solid #679bf3; \
+background-color:#77a7f9; \
+width:auto; \
+height:auto; \
+display:block!important; \
+margin:8px 5px!important; \
+padding:5px!important } \
+\
+div.TFProfile p.TFProfile_Done>a:hover { \
+color:#fff; \
+border:1px solid #4585f3; \
+-webkit-box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);\
+box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);\
+background: #77a7f9;\
+background: -moz-linear-gradient(top, #77a7f9 0%, #699cf2 100%);\
+background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#77a7f9), color-stop(100%,#699cf2));\
+background: -webkit-linear-gradient(top, #77a7f9 0%,#699cf2 100%);\
+background: -o-linear-gradient(top, #77a7f9 0%,#699cf2 100%);\
+background: -ms-linear-gradient(top, #77a7f9 0%,#699cf2 100%);\
+background: linear-gradient(to bottom, #77a7f9 0%,#699cf2 100%);\
+filter: progid:DXImageTransform.Microsoft.gradient( startColorstr="#77a7f9", endColorstr="#699cf2",GradientType=0 );} \
+\
+div.TFProfile p.TFProfile_Pending { \
+font-family:Verdana, Arial, Helvetica, sans-serif !important; \
+font-size:9px !important; \
+font-style:normal !important; \
+line-height:normal !important; \
+font-weight:700 !important; \
+font-variant:normal !important; \
+text-decoration:none !important; \
+letter-spacing:0 !important; \
+text-align:left !important; \
+color:#b1b1b1 !important; \
+border:1px solid #cbcbcb !important; \
+background-color:#e5e5e5 !important; \
+width:auto !important; \
+height:auto !important; \
+display:block !important; \
+margin:8px 5px !important;\
+padding:5px !important } \
+\
+div.TFProfile p.TFProfile_Missing { \
+display:none!important; \
+} \
 ');
