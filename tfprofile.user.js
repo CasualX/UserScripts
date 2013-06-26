@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       	TF2 Profile Script
 // @namespace  	tfprofile
-// @version    	1.1.1
+// @version    	1.1.2
 // @description Mouse over profile links (steamcommunity/etf2l/wireplay/teamfortress.tv) to get links their profiles on otherwebsites
 // @downloadURL https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
 // @updateURL   https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
@@ -568,7 +568,7 @@ z-index:9999999 !important; \
 background-color:#F8F8FF !important; \
 border: solid 1px #C0C0C0 !important; \
 min-width:200px !important; \
-padding:5px; \
+padding:5px 10px; \
 -webkit-box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); \
 box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); } \
 \
@@ -630,7 +630,7 @@ background-color:#77a7f9; \
 width:auto; \
 height:auto; \
 display:block!important; \
-margin:8px 5px!important; \
+margin:2px 0px!important; \
 padding:5px!important } \
 \
 div.TFProfile p.TFProfile_Done>a:hover { \
@@ -663,7 +663,7 @@ background-color:#e5e5e5 !important; \
 width:auto !important; \
 height:auto !important; \
 display:block !important; \
-margin:8px 5px !important;\
+margin:2px 0px !important;\
 padding:5px !important } \
 \
 div.TFProfile p.TFProfile_Missing { \
@@ -671,6 +671,7 @@ display:none!important; \
 } \
 div.TFProfile article { \
 	border-bottom: 1px dotted #C0C0C0; \
+	padding: 5px 0px; \
 } \
 div.TFProfile article:last-child { \
 	border-bottom: none; \
