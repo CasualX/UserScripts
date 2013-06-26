@@ -1,8 +1,10 @@
 // ==UserScript==
 // @name       	TF2 Profile Script
 // @namespace  	tfprofile
-// @version    	1.0
+// @version    	1.1.0
 // @description Mouse over profile links (steamcommunity/etf2l/wireplay/teamfortress.tv) to get links their profiles on otherwebsites
+// @downloadURL https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
+// @updateURL   https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
 // @include     http://*
 // @include     https://*
 // @grant		GM_xmlhttpRequest
@@ -120,47 +122,28 @@ function searchEngine( site, title, content, fn )
 // Each website may have these 3 functions:
 //  match: Given an url return a non false value if you can handle this profile link
 //  source: Source the player's steamid from this profile url, directly called after match with its returned value (eg, regex result). Callback player.initialize with the steamid on success.
-//  query: Find out given the steamid if this player has a profile on this website. Callback player.addProfile with the url and description on success.
+//  query: Find out given the steamid if this player has a profile on this website. Callback player.addLink with the url and description on success.
+
+function siteSetLink( p, url, desc, html )
+{
+	var a = document.createElement('a');
+	a.href = url;
+	if ( html ) a.innerHTML = html;
+	var text = document.createTextNode(desc);
+	if ( a.firstChild ) a.insertBefore( text, a.firstChild );
+	else a.appendChild( text );
+	p.innerHTML = '';
+	p.appendChild( a );
+	p.className = 'TFProfile_Done';
+}
+function siteSetMissing( p )
+{
+	p.className = 'TFProfile_Missing';
+}
+
 var sites = {
-// ETF2L Support
-"etf2l": {
-	match: function( url ) { return /^http\:\/\/etf2l.org\/forum\/user\/(\d+)\/?$/.exec(url); },
-	source: function( re, player )
-	{
-		GM_xmlhttpRequest( {
-			method: "GET",
-			url: "http://etf2l.org/feed/player/?id=" + re[1],
-			onload: function( resp )
-			{
-				var parser = new DOMParser();
-				var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
-				var str = doc.querySelector( "player" ).getAttribute("steamid");
-				player.initialize( CSteamID.parse( str ) );
-			},
-			onerror: function( resp )
-			{
-				player.error( resp.responseText );
-			}
-		} );
-	},
-	query: function( sid, player )
-	{
-		GM_xmlhttpRequest( {
-			method: "GET",
-			url: "http://etf2l.org/feed/player/?steamid=" + sid.render(),
-			onload: function( resp )
-			{
-				var parser = new DOMParser();
-				var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
-				var id = doc.querySelector("player").getAttribute("id");
-				var name = doc.querySelector("displayname").textContent;
-				player.addProfile( "http://etf2l.org/forum/user/"+id+"/", "ETF2L Profile (" + name + ")" );
-			}
-		} );
-	}
-},
 // Steam community support
-"steamcommunity": {
+"steamcommunity.com": {
 	match: function( url ) { return /^https?\:\/\/steamcommunity\.com\/(?:profiles|id)\/[^\/]*\/?$/.exec(url); },
 	source: function( re, player )
 	{
@@ -180,7 +163,7 @@ var sites = {
 			}
 		} );
 	},
-	query: function( sid, player )
+	query: function( sid, player, el )
 	{
 		var commid = sid.toString();
 		GM_xmlhttpRequest( {
@@ -190,26 +173,39 @@ var sites = {
 			{
 				var parser = new DOMParser();
 				doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
-				var name = doc.querySelector("steamID").textContent;
-				player.addProfile( "https://steamcommunity.com/profiles/"+commid, "Steam Community" + (name?(" ("+name+")"):"") );
+				
+				// Profiles that haven't been set up do not have a name, in this case, steamID will be empty
+				var desc = "Steam Community", name = doc.querySelector("steamID"), online = doc.querySelector("onlineState");
+				if ( name && name.textContent ) desc += " ("+name.textContent+")";
+				siteSetLink( el, "https://steamcommunity.com/profiles/"+commid, desc, online?'<span style="padding-left:5px;font-size:xx-small;">'+online.textContent+'</span>':undefined );
+				
+				var gameIP = doc.querySelector("inGameServerIP");
+				var gameName = doc.querySelector("inGameInfo>gameName")
+				var gameJoin = doc.querySelector("inGameInfo>gameJoinLink");
+				if ( gameIP && gameIP.textContent && gameName && gameName.textContent && gameJoin && gameJoin.textContent )
+				{
+					var a = document.createElement('a');
+					a.href = gameJoin.textContent;
+					a.innerHTML = "In-Game: "+gameName.textContent;
+					el.appendChild( a );
+				}
 			}
 		} );
 	}
 },
-// TeamFortress.tv profiles (barely works...)
-"teamfortress.tv": {
-	match: function( url ) { return /^https?\:\/\/teamfortress\.tv\/profile\/user\/[^\/]*\/?$/.exec(url); },
+// ETF2L Support
+"etf2l.org": {
+	match: function( url ) { return /^http\:\/\/etf2l.org\/forum\/user\/(\d+)\/?$/.exec(url); },
 	source: function( re, player )
 	{
 		GM_xmlhttpRequest( {
 			method: "GET",
-			url: re[0],
+			url: "http://etf2l.org/feed/player/?id=" + re[1],
 			onload: function( resp )
 			{
-				// RegExp because no API and not easily accessible
-				var r = /(STEAM_0\:[01]\:\d+)/.exec( resp.responseText );
-				if ( r ) player.initialize( CSteamID.parse( r[1] ) );
-				else player.error( "regex failure" );
+				var parser = new DOMParser();
+				var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement.querySelector( "player" );
+				player.initialize( CSteamID.parse( str ? str.getAttribute("steamid") : "" ) );
 			},
 			onerror: function( resp )
 			{
@@ -217,18 +213,28 @@ var sites = {
 			}
 		} );
 	},
-	query: function( sid, player )
+	query: function( sid, player, el )
 	{
-		// Cannot query by steamid...
-		searchEngine( "teamfortress.tv", "Profile", sid.render(), function(r) {
-			var url = r[1];
-			var name = /profile\/user\/(.*?)\/?$/.exec(url)[1];
-			player.addProfile( url, "TeamFortress.tv ("+name+")" );
+		GM_xmlhttpRequest( {
+			method: "GET",
+			url: "http://etf2l.org/feed/player/?steamid=" + sid.render(),
+			onload: function( resp )
+			{
+				try {
+					var parser = new DOMParser();
+					var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
+					var id = doc.querySelector("player").getAttribute("id");
+					var name = doc.querySelector("displayname").textContent;
+					siteSetLink( el, "http://etf2l.org/forum/user/"+id+"/", "ETF2L Profile ("+name+")" );
+				} catch(e) {
+					siteSetMissing( el );
+				}
+			}
 		} );
 	}
 },
 // Wireplay TF2 League
-"wireplay": {
+"tf2.wireplay.co.uk": {
 	match: function( url ) { return /^https?\:\/\/tf2\.wireplay\.co\.uk\/.*?index\.php\?pg=profile\&action=viewprofile\&aid=(\d+)/.exec(url); },
 	source: function( re, player )
 	{
@@ -238,8 +244,7 @@ var sites = {
 			onload: function( resp )
 			{
 				var r = /<td align=left>(STEAM_0\:[01]\:\d+)<\/td>/.exec(resp.responseText);
-				if ( r ) player.initialize( CSteamID.parse( r[1] ) );
-				else player.error( "regex failure" );
+				player.initialize( CSteamID.parse( r?r[1]:"" ) );
 			},
 			onerror: function( resp )
 			{
@@ -247,7 +252,7 @@ var sites = {
 			}
 		} );
 	},
-	query: function( sid, player )
+	query: function( sid, player, el )
 	{
 		GM_xmlhttpRequest( {
 			method: "POST",
@@ -256,17 +261,21 @@ var sites = {
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			onload: function( resp )
 			{
-				var r = /<td><a href="(index.php\?pg=profile\&action=viewprofile\&aid=\d+)">([^<]*)<\/a><\/td>/.exec(resp.responseText);
-				player.addProfile( "http://tf2.wireplay.co.uk/"+r[1], "Wireplay Profile ("+r[2]+")" );
+				try {
+					var r = /<td><a href="(index.php\?pg=profile\&action=viewprofile\&aid=\d+)">([^<]*)<\/a><\/td>/.exec(resp.responseText);
+					siteSetLink( el, "http://tf2.wireplay.co.uk/"+r[1], "Wireplay Profile ("+r[2]+")" );
+				} catch(e) {
+					siteSetMissing( el );
+				}
 			}
 		} );
 	}
 },
 // UGC League
-"ugcleague": {
+"ugcleague.com": {
 	match: function( url ) { return /^https?\:\/\/www.ugcleague.com\/players_page\.cfm\?player_id=(\d+)$/.exec(url); },
 	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
-	query: function( sid, player )
+	query: function( sid, player, el )
 	{
 		// Assumption: Just check if the player's steamid is on the page, that means he's played in a team.
 		// FIXME! Use their player search page instead? http://www.ugcleague.com/playersearch.cfm
@@ -276,39 +285,19 @@ var sites = {
 			onload: function( resp )
 			{
 				if ( resp.responseText.indexOf( "<td>"+sid.render().substr(6)+"</td>" )>=0 )
-					player.addProfile( "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(), "UGC League Profile" );
+					siteSetLink( el, "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(), "UGC League Profile" );
+				else
+					siteSetMissing( el );
 			}
 		} );
 	}
-},
-// logs.tf
-"logs.tf": {
-	match: function( url ) { return /^http\:\/\/logs\.tf\/profile\/(\d+)\/?$/.exec(url); },
-	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
-	query: function( sid, player )
-	{
-		GM_xmlhttpRequest( {
-			method: "GET",
-			url: "http://logs.tf/profile/"+sid.toString(),
-			onload: function( resp )
-			{
-				if ( !(/<h5>None found\.<\/h5>/.test(resp.responseText)) )
-					player.addProfile( "http://logs.tf/profile/"+sid.toString(), "Logs.tf Profile" );
-			}
-		} );
-	}
-},
-// SizzlingStats.com (FIXME! Figure out their query api)
-"SizzlingStats": {
-	match: function( url ) { return /^http\:\/\/sizzlingstats\.com\/player\/(\d+)\/?$/.exec(url); },
-	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); }
 },
 // TF2Lobby.com
-"tf2lobby": {
+"tf2lobby.com": {
 	match: function( url ) { return /^http\:\/\/(?:www.)?tf2lobby\.com\/profile\?(f?id)=(\d+)$/.exec(url); },
 	source: function( re, player )
 	{
-		if ( re[1]=='fid' )
+		if ( re[1]==='fid' )
 		{
 			player.initialize( CSteamID.parse( re[2] ) );
 			return;
@@ -333,23 +322,82 @@ var sites = {
 			}
 		} );
 	},
-	query: function( sid, player )
+	query: function( sid, player, el )
 	{
 		GM_xmlhttpRequest( {
 			method: "GET",
 			url: "http://www.tf2lobby.com/profile?fid="+sid.toString(),
 			onload: function( resp )
 			{
-				var dom = new DOMParser();
-				var doc = dom.parseFromString( resp.responseText, "text/html" ).documentElement;
-				if ( doc.querySelector("#otherSites") )
-				{
-					var name = doc.querySelector("#player p").textContent;
-					player.addProfile( "http://www.tf2lobby.com/profile?fid="+sid.toString(), "TF2Lobby Profile ("+name+")" );
+				try {
+					var dom = new DOMParser();
+					var doc = dom.parseFromString( resp.responseText, "text/html" ).documentElement;
+					var name = ( doc.querySelector("#otherSites") && doc.querySelector("#player p") ).textContent;
+					siteSetLink( el, "http://www.tf2lobby.com/profile?fid="+sid.toString(), "TF2Lobby Profile ("+name+")" );
+				} catch(e) {
+					siteSetMissing( el );
 				}
 			}
 		} );
 	}
+},
+// TeamFortress.tv profiles (barely works...)
+"teamfortress.tv": {
+	match: function( url ) { return /^https?\:\/\/teamfortress\.tv\/profile\/user\/[^\/]*\/?$/.exec(url); },
+	source: function( re, player )
+	{
+		GM_xmlhttpRequest( {
+			method: "GET",
+			url: re[0],
+			onload: function( resp )
+			{
+				var r = /(STEAM_0\:[01]\:\d+)/.exec( resp.responseText );
+				player.initialize( CSteamID.parse( r?r[1]:0 ) );
+			},
+			onerror: function( resp )
+			{
+				player.error( resp.responseText );
+			}
+		} );
+	},
+	query: function( sid, player, el )
+	{
+		// Cannot query by steamid...
+		searchEngine( "teamfortress.tv", "Profile", sid.render(), function(r) {
+			try {
+				var url = r[1];
+				var name = /profile\/user\/(.*?)\/?$/.exec(url)[1];
+				siteSetLink( el, url, "TeamFortress.tv ("+name+")" );
+			} catch(e) {
+				siteSetMissing( el );
+			}
+		} );
+	}
+},
+// logs.tf
+"logs.tf": {
+	match: function( url ) { return /^http\:\/\/logs\.tf\/profile\/(\d+)\/?$/.exec(url); },
+	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
+	query: function( sid, player, el )
+	{
+		GM_xmlhttpRequest( {
+			method: "GET",
+			url: "http://logs.tf/profile/"+sid.toString(),
+			onload: function( resp )
+			{
+				if ( !(/<h5>None found\.<\/h5>/.test(resp.responseText)) )
+					siteSetLink( el, "http://logs.tf/profile/"+sid.toString(), "Logs.tf Profile" );
+				else
+					siteSetMissing( el );
+			}
+		} );
+	}
+},
+// SizzlingStats.com (FIXME! Figure out their query api)
+"sizzlingstats.com": {
+	match: function( url ) { return /^http\:\/\/sizzlingstats\.com\/player\/(\d+)\/?$/.exec(url); },
+	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
+	query: function( sid, player ) { return false; }
 },
 };
 
@@ -379,8 +427,15 @@ linkPlayer.prototype.initialize = function( sid )
 		for ( var it in sites )
 		{
 			var site = sites[it];
-			try { site.query( sid, this ); }
-			catch ( e ) { } // Fuck error checking, this will do
+			
+			var p = document.createElement('p');
+			p.className = 'TFProfile_Pending';
+			p.textContent = it;
+			
+			if ( site.query( sid, this, p )!==false )
+			{
+				this.div.appendChild( p );
+			}
 		}
 	}
 	else
@@ -389,11 +444,12 @@ linkPlayer.prototype.initialize = function( sid )
 	}
 }
 // Add a profile
-linkPlayer.prototype.addProfile = function( url, desc )
+linkPlayer.prototype.addLink = function( url, desc, q )
 {
-	var p = document.createElement('p');
+	var p = q || document.createElement('p');
 	p.innerHTML = '<a href="' + url + '" target="_blank">' + desc + '</a>';
-	this.div.appendChild( p );
+	p.className = 'TFProfile_Done';
+	if ( !q ) this.div.appendChild( p );
 }
 // Error happened
 linkPlayer.prototype.error = function( desc )
@@ -441,9 +497,9 @@ linkPlayer.prototype.source = function( a, re, site )
 		clear();
 	}
 	a.addEventListener( 'mouseover', hover, false );
-	a.addEventListener( 'mouseleave', function(e) { /*for(var el=e.relatedTarget;el=el.parentNode;){if(el==a||el==self.div)return;}*/ self.timer = window.setTimeout( leave, 500 ); }, false );
+	a.addEventListener( 'mouseleave', function(e) { self.timer = window.setTimeout( leave, 500 ); }, false );
 	this.div.addEventListener( 'mouseover', clear, false );
-	this.div.addEventListener( 'mouseleave', function(e) { /*for(var el=e.relatedTarget;el=el.parentNode;){if(el==a||el==self.div)return;}*/ leave(); }, false );
+	this.div.addEventListener( 'mouseleave', function(e) { leave(); }, false );
 
 	// Work around for mouseleave not working for chrome...
 	var img = document.createElement('img');
@@ -474,7 +530,9 @@ addStyle('\
 div.TFProfile { position:absolute !important; z-index:9999999 !important; background-color:#F8F8FF !important; border: solid 1px #C0C0C0 !important; min-width:200px !important; padding:5px; -webkit-box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); box-shadow: 1px 1px 1px 0px rgba(0, 0, 0, 0.3); } \
 div.TFProfile img { float:right !important;margin:-5px 0px 0px 0px !important;background-color: #cbcbcb;display: block;height: 18px;width: 36px;font-family: Verdana, Arial, Helvetica, sans-serif;font-size: 11px;font-weight: bold;color: #fff;text-decoration: none;text-align:center;cursor: pointer;line-height: 16px;border: none;-webkit-transition: background 100ms ease-in-out;-moz-transition: background 100ms ease-in-out;-ms-transition: background 100ms ease-in-out;-o-transition: background 100ms ease-in-out;transition: background 100ms ease-in-out; } \
 div.TFProfile img:hover { background-color: #de5044;} \
-div.TFProfile p { letter-spacing:0px !important; text-align:left !important; color:#555; padding:0 !important; margin:5px !important; display: block !important; border: none !important; font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 10px; font-style: normal; line-height: normal; font-weight: normal; font-variant: normal; color: #4c4c4c; text-decoration: none; } \
-div.TFProfile p>a { font-family:Verdana, Arial, Helvetica, sans-serif; font-size:9px; font-style:normal; line-height:normal; font-weight:700; font-variant:normal; text-decoration:none; letter-spacing:0 !important; text-align:left !important; color:#f8f8f8; border:1px solid #679bf3; background-color:#77a7f9; width:auto; height:auto; display:block!important; margin:8px 0!important; padding:5px!important } \
-div.TFProfile p>a:hover { font-family:Verdana, Arial, Helvetica, sans-serif;font-size:9px;font-style:normal;line-height:normal;font-weight:700;font-variant:normal;color:#fff;text-decoration:none;letter-spacing:0!important;text-align:left!important;border:1px solid #4585f3;width:auto;height:auto;display:block!important;-webkit-box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);background: #77a7f9;background: -moz-linear-gradient(top, #77a7f9 0%, #699cf2 100%);background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#77a7f9), color-stop(100%,#699cf2));background: -webkit-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -o-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -ms-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: linear-gradient(to bottom, #77a7f9 0%,#699cf2 100%);filter: progid:DXImageTransform.Microsoft.gradient( startColorstr="#77a7f9", endColorstr="#699cf2",GradientType=0 );margin:8px 0!important;padding:5px!important} \
+div.TFProfile p { letter-spacing:0px !important; text-align:left !important; color:#555!important; padding:0!important; margin:5px!important; display: block !important; border: none !important; font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 10px; font-style: normal; line-height: normal; font-weight: normal; font-variant: normal; color: #4c4c4c; text-decoration: none; } \
+div.TFProfile p.TFProfile_Done>a { font-family:Verdana, Arial, Helvetica, sans-serif; font-size:9px; font-style:normal; line-height:normal; font-weight:700; font-variant:normal; text-decoration:none; letter-spacing:0 !important; text-align:left !important; color:#f8f8f8; border:1px solid #679bf3; background-color:#77a7f9; width:auto; height:auto; display:block!important; margin:8px 0!important; padding:5px!important } \
+div.TFProfile p.TFProfile_Done>a:hover { font-family:Verdana, Arial, Helvetica, sans-serif;font-size:9px;font-style:normal;line-height:normal;font-weight:700;font-variant:normal;color:#fff;text-decoration:none;letter-spacing:0!important;text-align:left!important;border:1px solid #4585f3;width:auto;height:auto;display:block!important;-webkit-box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);box-shadow:1px 1px 2px 0 rgba(0,0,0,0.1);background: #77a7f9;background: -moz-linear-gradient(top, #77a7f9 0%, #699cf2 100%);background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#77a7f9), color-stop(100%,#699cf2));background: -webkit-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -o-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: -ms-linear-gradient(top, #77a7f9 0%,#699cf2 100%);background: linear-gradient(to bottom, #77a7f9 0%,#699cf2 100%);filter: progid:DXImageTransform.Microsoft.gradient( startColorstr="#77a7f9", endColorstr="#699cf2",GradientType=0 );margin:8px 0!important;padding:5px!important} \
+div.TFProfile p.TFProfile_Pending { color:#CCC!important; } \
+div.TFProfile p.TFProfile_Missing { display:none!important; } \
 ');
