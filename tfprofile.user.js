@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       	TF2 Profile Script
 // @namespace  	tfprofile
-// @version    	1.1.0
+// @version    	1.1.1
 // @description Mouse over profile links (steamcommunity/etf2l/wireplay/teamfortress.tv) to get links their profiles on otherwebsites
 // @downloadURL https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
 // @updateURL   https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
@@ -139,6 +139,9 @@ function siteSetLink( p, url, desc, html )
 function siteSetMissing( p )
 {
 	p.className = 'TFProfile_Missing';
+	// Hide the parent article if it only has missing links...
+	if ( p.parentNode.children.length==p.parentNode.querySelectorAll(".TFProfile_Missing").length )
+		p.parentNode.style.display = "none";
 }
 
 var sites = {
@@ -665,5 +668,11 @@ padding:5px !important } \
 \
 div.TFProfile p.TFProfile_Missing { \
 display:none!important; \
+} \
+div.TFProfile article { \
+	border-bottom: 1px dotted #C0C0C0; \
+} \
+div.TFProfile article:last-child { \
+	border-bottom: none; \
 } \
 ');
