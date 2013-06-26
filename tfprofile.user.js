@@ -204,7 +204,8 @@ var sites = {
 			onload: function( resp )
 			{
 				var parser = new DOMParser();
-				var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement.querySelector( "player" );
+				var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
+				var str = doc.querySelector( "player" );
 				player.initialize( CSteamID.parse( str ? str.getAttribute("steamid") : "" ) );
 			},
 			onerror: function( resp )
