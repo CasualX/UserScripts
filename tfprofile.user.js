@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       	TF2 Profile Script
 // @namespace  	tfprofile
-// @version    	1.1.2
+// @version    	1.1.3
 // @description Mouse over profile links (steamcommunity/etf2l/wireplay/teamfortress.tv) to get links their profiles on otherwebsites
 // @downloadURL https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
 // @updateURL   https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
@@ -128,6 +128,7 @@ function siteSetLink( p, url, desc, html )
 {
 	var a = document.createElement('a');
 	a.href = url;
+	a.target = "_blank";
 	if ( html ) a.innerHTML = html;
 	var text = document.createTextNode(desc);
 	if ( a.firstChild ) a.insertBefore( text, a.firstChild );
@@ -141,7 +142,7 @@ function siteSetMissing( p )
 	p.className = 'TFProfile_Missing';
 	// Hide the parent article if it only has missing links...
 	if ( p.parentNode.children.length==p.parentNode.querySelectorAll(".TFProfile_Missing").length )
-		p.parentNode.style.display = "none";
+		p.parentNode.parentNode.removeChild( p.parentNode );
 }
 
 var sites = {
@@ -399,7 +400,7 @@ var sites = {
 // logs.tf
 "logs.tf": {
 	group: "stats",
-	match: function( url ) { return /^http\:\/\/logs\.tf\/profile\/(\d+)\/?$/.exec(url); },
+	match: function( url ) { return /^https?\:\/\/(?:www.)?logs\.tf\/profile\/(\d+)\/?$/.exec(url); },
 	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
 	query: function( sid, player, el )
 	{
@@ -421,9 +422,32 @@ var sites = {
 // SizzlingStats.com (FIXME! Figure out their query api)
 "sizzlingstats.com": {
 	group: "stats",
-	match: function( url ) { return /^http\:\/\/sizzlingstats\.com\/player\/(\d+)\/?$/.exec(url); },
+	match: function( url ) { return /^https?\:\/\/(?:www.)?sizzlingstats\.com\/player\/(\d+)\/?$/.exec(url); },
 	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
 	query: function( sid, player ) { return false; }
+},
+// TF2Logs.com (does anyone still use this?)
+"tf2logs.com": {
+	group: "stats",
+	match: function( url ) { return /^https?\:\/\/(?:www.)?tf2logs\.com\/players\/(\d+)\/?$/.exec(url); },
+	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
+	query: function( sid, player, el )
+	{
+		el.textContent = 'tf2logs.com';
+		
+		GM_xmlhttpRequest( {
+			method: "GET",
+			url: "http://tf2logs.com/players/"+sid.toString(),
+			onload: function( resp )
+			{
+				var re = /<meta name="title" content="([^>]*?) - TF2Logs.com" \/>/.exec(resp.responseText);
+				if ( re && re[1]!='Welcome' )
+					siteSetLink( el, "http://tf2logs.com/players/"+sid.toString(), "TF2Logs.com Profile" );
+				else
+					siteSetMissing( el );
+			}
+		} );
+	}
 },
 };
 
@@ -524,15 +548,24 @@ linkPlayer.prototype.show = function( a, fn )
 			self.timer = false;
 		}
 	}
+	function timer( fn, ms )
+	{
+		clear();
+		self.timer = window.setTimeout( fn, ms );
+	}
 	function leave()
 	{
 		self.div.style.display = "none";
 		clear();
 	}
-	a.addEventListener( 'mouseover', function(e) { clear(); self.timer = window.setTimeout( hover, 500 ); }, false );
-	a.addEventListener( 'mouseleave', function(e) { clear(); self.timer = window.setTimeout( leave, 500 ); }, false );
+	function related( parent, child )
+	{
+		return !( !child || ( child!==parent && !parent.contains( child ) ) );
+	}
+	a.addEventListener( 'mouseover', function(e) { timer( hover, 500 ); }, false );
+	a.addEventListener( 'mouseout', function(e) { if ( !related(this,e.relatedTarget) ) timer( leave, 500 ); }, false );
 	this.div.addEventListener( 'mouseover', clear, false );
-	this.div.addEventListener( 'mouseleave', function(e) { clear(); self.timer = window.setTimeout( leave, 200 ); }, false );
+	this.div.addEventListener( 'mouseout', function(e) { if ( !related(this,e.relatedTarget ) ) timer( leave, 200 ); }, false );
 
 	// Work around for mouseleave not working for chrome...
 	var img = document.createElement('img');
