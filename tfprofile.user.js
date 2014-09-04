@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       	TF2 Profile Script
 // @namespace  	tfprofile
-// @version    	1.1.4
+// @version    	1.1.5
 // @description Mouse over profile links (steamcommunity/etf2l/wireplay/teamfortress.tv) to get links their profiles on otherwebsites
 // @downloadURL https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
 // @updateURL   https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
@@ -47,6 +47,10 @@ CSteamID.prototype.render = function()
 {
 	// 'New' style [U:1:id] steamid
 	return "[U:1:" + (this.unAccountID) + "]";
+}
+CSteamID.prototype.renderOld = function()
+{
+	return "STEAM_0:" + (this.unAccountID%2) +":" + (this.unAccountID>>1);
 }
 CSteamID.prototype.toString = function()
 {
@@ -403,7 +407,7 @@ var sites = {
 // TeamFortress.tv profiles
 "teamfortress.tv": {
 	group: "forum",
-	match: function( url ) { return /^https?\:\/\/teamfortress\.tv\/profile\/user\/[^\/]*\/?$/.exec(url); },
+	match: function( url ) { return /^https?\:\/\/teamfortress\.tv\/user\/profile\/[^\/]*\/?$/.exec(url); },
 	source: function( re, player )
 	{
 		GM_xmlhttpRequest( {
@@ -425,10 +429,10 @@ var sites = {
 		el.textContent = 'teamfortress.tv';
 		
 		// Cannot query by steamid...
-		searchEngine( "teamfortress.tv", "Profile", sid.render(), function(r,s) {
+		searchEngine( "teamfortress.tv", "Profile", sid.renderOld(), function(r,s) {
 			try {
 				var url = r[1];
-				var name = /profile\/user\/(.*?)\/?$/.exec(url)[1];
+				var name = /user\/profile\/(.*?)\/?$/.exec(url)[1];
 				siteSetLink( el, url, "TeamFortress.tv ("+name+")" );
 			} catch(e) {
 				siteSetMissing( el );
