@@ -104,7 +104,9 @@ function searchEngine( site, title, content, fn )
 		{
 			// Found a valid result
 			if ( r[1].indexOf(site)>=0 )
-				return fn( r );
+			{
+				return fn( r, /https?\:\/\/([^\/]*)/.exec(engine.qurl)[1] );
+			}
 		}
 		// Not found, try another search engine
 		if ( engine.next ) search( engine.next );
@@ -117,8 +119,14 @@ function searchEngine( site, title, content, fn )
 		next: {
 		qurl: "https://startpage.com/do/search?q=",
 		regex: /<a href='([^']*)' id='title_\d'/,
-	}
-	};
+		next: {
+		qurl: "https://duckduckgo.com/html/?q=",
+		regex: /<a rel="nofollow" class="large" href="([^"]*)">/,
+		// We really want to use google?... (it finds pretty much everything)
+		next: {
+		qurl: "https://encrypted.google.com/search?hl=en&q=",
+		regex: /<h3 class="r"><a href="([^"]*)" /,
+	} } } };
 	search( engines );
 }
 
@@ -417,7 +425,7 @@ var sites = {
 		el.textContent = 'teamfortress.tv';
 		
 		// Cannot query by steamid...
-		searchEngine( "teamfortress.tv", "Profile", sid.render(), function(r) {
+		searchEngine( "teamfortress.tv", "Profile", sid.render(), function(r,s) {
 			try {
 				var url = r[1];
 				var name = /profile\/user\/(.*?)\/?$/.exec(url)[1];
