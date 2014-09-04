@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       	TF2 Profile Script
 // @namespace  	tfprofile
-// @version    	1.1.3
+// @version    	1.1.4
 // @description Mouse over profile links (steamcommunity/etf2l/wireplay/teamfortress.tv) to get links their profiles on otherwebsites
 // @downloadURL https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
 // @updateURL   https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
@@ -45,8 +45,8 @@ CSteamID.prototype.setID64 = function( id )
 }
 CSteamID.prototype.render = function()
 {
-	// Old style STEAM_0:x:y format
-	return "STEAM_0:" + (this.unAccountID%2) + ":" + (this.unAccountID>>1);
+	// 'New' style [U:1:id] steamid
+	return "[U:1:" + (this.unAccountID) + "]";
 }
 CSteamID.prototype.toString = function()
 {
@@ -69,7 +69,13 @@ CSteamID.parse = function( str )
 		sid = new CSteamID();
 		sid.setID( parseInt(re[2])*2 + parseInt(re[1]) );
 	}
-	// Looks like a standard 64bit steamid
+	// New SteamID format in TF2, I assume this is the future.
+	else if ( re = /^\[?U\:(\d)\:(\d+)\]?$/.exec( str ) )
+	{
+		sid = new CSteamID();
+		sid.setID( parseInt(re[2]) );
+	}
+	// Looks like a standard 64bit steamid.
 	else if ( re = /^\d+$/.exec( str ) )
 	{
 		sid = new CSteamID();
@@ -320,7 +326,7 @@ var sites = {
 			player.initialize( CSteamID.parse( re[2] ) );
 			return;
 		}
-		
+
 		GM_xmlhttpRequest( {
 			method: "GET",
 			url: "http://www.tf2lobby.com/profile?id="+re[2],
@@ -361,7 +367,32 @@ var sites = {
 		} );
 	}
 },
-// TeamFortress.tv profiles (barely works...)
+// TF2Center.com
+"rc.tf2center.com": {
+	group: "lobby",
+	match: function( url ) { return /^http\:\/\/rc\.tf2center\.com\/profile\/(\d+)$/.exec(url); },
+	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
+	query: function( sid, player, el ) {
+		el.textContent = "rc.tf2center.com";
+
+		GM_xmlhttpRequest( {
+			method: "GET",
+			url: "http://rc.tf2center.com/profile/"+sid.toString(),
+			onload: function( resp )
+			{
+				try {
+					var dom = new DOMParser();
+					var doc = dom.parseFromString( resp.responseText, "text/html" ).documentElement;
+					var name = doc.querySelector("div#mainHeader div.userProfile>h1").textContent.trim();
+					siteSetLink( el, "http://rc.tf2center.com/profile/"+sid.toString(), "TF2Center Profile ("+name+")" );
+				} catch(e) {
+					setSetMissing( el );
+				}
+			}
+		} );
+	}
+},
+// TeamFortress.tv profiles
 "teamfortress.tv": {
 	group: "forum",
 	match: function( url ) { return /^https?\:\/\/teamfortress\.tv\/profile\/user\/[^\/]*\/?$/.exec(url); },
