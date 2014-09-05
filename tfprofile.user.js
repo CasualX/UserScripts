@@ -316,14 +316,14 @@ var sites = {
 	{
 		el.textContent = 'ugcleague.com';
 		
-		// Assumption: Just check if the player's steamid is on the page, that means he's played in a team.
+		// Assumption: See if the text "UGC Player's Page" is on the page...
 		// FIXME! Use their player search page instead? http://www.ugcleague.com/playersearch.cfm
 		GM_xmlhttpRequest( {
 			method: "GET",
 			url: "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(),
 			onload: function( resp )
 			{
-				if ( resp.responseText.indexOf( "<td>"+sid.render().substr(6)+"</td>" )>=0 )
+				if ( resp.responseText.indexOf( "UGC Player's Page" )>=0 )
 					siteSetLink( el, "http://www.ugcleague.com/players_page.cfm?player_id="+sid.toString(), "UGC League Profile" );
 				else
 					siteSetMissing( el );
