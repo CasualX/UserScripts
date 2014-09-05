@@ -226,13 +226,15 @@ var sites = {
 	{
 		GM_xmlhttpRequest( {
 			method: "GET",
-			url: "http://etf2l.org/feed/player/?id=" + re[1],
+			url: "http://api.etf2l.org/player/" + re[1],
+			headers: {
+				Accept: "application/json"
+			},
 			onload: function( resp )
 			{
-				var parser = new DOMParser();
-				var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
-				var str = doc.querySelector( "player" );
-				player.initialize( CSteamID.parse( str ? str.getAttribute("steamid") : "" ) );
+				var data = JSON.parse( resp.responseText );
+				var sid = (data.status.code==200) ? CSteamID.parse( data.player.steam.id3 ) : null;
+				player.initialize( sid );
 			},
 			onerror: function( resp )
 			{
@@ -246,14 +248,16 @@ var sites = {
 		
 		GM_xmlhttpRequest( {
 			method: "GET",
-			url: "http://etf2l.org/feed/player/?steamid=" + sid.render(),
+			url: "http://api.etf2l.org/player/" + sid.renderOld(),
+			headers: {
+				Accept: "application/json"
+			},
 			onload: function( resp )
 			{
 				try {
-					var parser = new DOMParser();
-					var doc = parser.parseFromString( resp.responseText, "text/xml" ).documentElement;
-					var id = doc.querySelector("player").getAttribute("id");
-					var name = doc.querySelector("displayname").textContent;
+					var data = JSON.parse( resp.responseText );
+					var id = data.player.id;
+					var name = data.player.name;
 					siteSetLink( el, "http://etf2l.org/forum/user/"+id+"/", "ETF2L Profile ("+name+")" );
 				} catch(e) {
 					siteSetMissing( el );
