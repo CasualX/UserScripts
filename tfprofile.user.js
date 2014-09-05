@@ -1,14 +1,14 @@
 // ==UserScript==
-// @name       	TF2 Profile Script
-// @namespace  	tfprofile
-// @version    	1.1.5
-// @description Mouse over profile links (steamcommunity/etf2l/wireplay/teamfortress.tv) to get links their profiles on otherwebsites
+// @name        TF2 Profile Script
+// @namespace   tfprofile
+// @version     1.1.6
+// @description Mouse over profile links to get more links their profiles on other tf2 gaming websites
 // @downloadURL https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
 // @updateURL   https://github.com/CasualX/UserScripts/raw/master/tfprofile.user.js
 // @include     http://*
 // @include     https://*
-// @grant		GM_xmlhttpRequest
-// @run-at document-end
+// @grant       GM_xmlhttpRequest
+// @run-at      document-end
 // ==/UserScript==
 
 // Base conversion of arbitrary precision integers
@@ -306,7 +306,7 @@ var sites = {
 // UGC League
 "ugcleague.com": {
 	group: "comptf2",
-	match: function( url ) { return /^https?\:\/\/www.ugcleague.com\/players_page\.cfm\?player_id=(\d+)$/.exec(url); },
+	match: function( url ) { return /^https?\:\/\/(?:www\.)?ugcleague\.com\/players_page\.cfm\?player_id=(\d+)$/.exec(url); },
 	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
 	query: function( sid, player, el )
 	{
@@ -398,7 +398,32 @@ var sites = {
 					var name = doc.querySelector("div#mainHeader div.userProfile>h1").textContent.trim();
 					siteSetLink( el, "http://rc.tf2center.com/profile/"+sid.toString(), "TF2Center Profile ("+name+")" );
 				} catch(e) {
-					setSetMissing( el );
+					siteSetMissing( el );
+				}
+			}
+		} );
+	}
+},
+// TF2Pickup
+"tf2pickup.net": {
+	group: "lobby",
+	match: function( url ) { return /^http\:\/\/tf2pickup.net\/profile\/(\d+)$/.exec(url); },
+	source: function( re, player ) { player.initialize( CSteamID.parse( re[1] ) ); },
+	query: function( sid, player, el ) {
+		el.textContent = "tf2pickup.net";
+
+		// FIXME! Only works if you're logged in, however GM_xmlhttpRequest isn't sending the proper cookies!
+		GM_xmlhttpRequest( {
+			method: "GET",
+			url: "http://tf2pickup.net/profile/"+sid.toString(),
+			onload: function( resp ) {
+				try {
+					var dom = new DOMParser();
+					var doc = dom.parseFromString( resp.responseText, "text/html" ).documentElement;
+					var name = doc.querySelector("div#profile h2.player-name").textContent.trim();
+					siteSetLink( el, "http://tf2pickup.net/profile/"+sid.toString(), "TF2Pickup Profile ("+name+")" );
+				} catch (e) {
+					siteSetMissing( el );
 				}
 			}
 		} );
