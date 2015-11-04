@@ -7,9 +7,11 @@
 // @updateURL      https://github.com/CasualX/UserScripts/raw/master/instantvideo.user.js
 // @match          https://www.gfycat.com/*
 // @match          https://gfycat.com/*
+// @match          https://streamable.com/*
 // @match          http://www.gfycat.com/*
 // @match          http://gfycat.com/*
 // @match          http://oddshot.tv/shot/*
+// @match          http://streamable.com/*
 // @grant          none
 // @run-at         document-end
 // ==/UserScript==
